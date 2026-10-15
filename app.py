@@ -2,72 +2,80 @@ import streamlit as st
 import pandas as pd
 
 # Pagina instellingen
-st.set_page_config(page_title="Foodcost Calculator", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Foodcost Calculator", layout="wide")
 
-st.title("🍽️ Foodcost Berekening App")
-st.write("Bereken de kostprijs van je gerecht op basis van je ingrediënten.")
+st.title("🍽️ Foodcost Berekening App (1-op-1 Excel)")
+st.write("Vul de gegevens in exact zoals in je Excel-kolommen.")
 
-# Onthoud de ingrediënten zolang de app open staat
-if 'ingredients' not in st.session_state:
-    st.session_state.ingredients = []
+# Sessie-state voor het bijhouden van de producten in de tabel
+if 'recept_lijnen' not in st.session_state:
+    st.session_state.recept_lijnen = []
 
-# Zijbalk voor het invoeren van ingrediënten
-st.sidebar.header("➕ Ingrediënt Toevoegen")
+# Formulier aan de linkerkant voor invoer
+st.sidebar.header("📥 Product Invoeren")
 
-with st.sidebar.form(key='ingredient_form', clear_on_submit=True):
-    leverancier = st.text_input("Leverancier (Vak A)")
-    product = st.text_input("Productomschrijving (Vak B)")
-    aantal_pers = st.number_input("Aantal personen (Vak D)", min_value=1, value=1)
-    st_unit = st.number_input("Inhoud van product / St/unit (Vak E)", min_value=0.001, value=1.000, step=0.001, format="%.3f")
-    st_pers = st.number_input("Nodig per persoon / st/pers (Vak F)", min_value=0.000, value=1.000, step=0.001, format="%.3f")
-    prijs = st.number_input("Prijs van het product (Vak G)", min_value=0.00, value=0.00, step=0.01, format="%.2f")
+with st.sidebar.form(key='excel_form', clear_on_submit=True):
+    vak_a = st.text_input("Leverancier (Vak A)")
+    vak_b = st.text_input("Productomschrijving (Vak B)")
     
-    # De gecorrigeerde knop-functie
-    submit_button = st.form_submit_button(label='Voeg toe aan recept')
-
-# Logica wanneer er op de knop geklikt wordt
-if submit_button and product:
-    # Berekeningen gebaseerd op jouw exacte Excel-formules
-    bestel_qt = (aantal_pers / st_unit) * st_pers if st_unit > 0 else 0
-    totaalprijs = bestel_qt * prijs
-    stukprijs_per_pers = (prijs / st_unit) * st_pers if st_unit > 0 else 0
+    # Aantal personen mag ook 0 of leeg zijn (zoals in jouw kerstomaatjes voorbeeld)
+    vak_d = st.number_input("Aantal pers (Vak D)", min_value=0, value=0, step=1)
     
-    # Gegevens opslaan in een lijst
-    new_ingredient = {
-        "Leverancier": leverancier,
-        "Product": product,
-        "Bestel qt": round(bestel_qt, 4),
-        "Aantal pers": aantal_pers,
-        "St/unit": st_unit,
-        "st/pers": st_pers,
-        "Prijs": round(prijs, 2),
-        "Totaal": round(totaalprijs, 2),
-        "Stukprijs p.p.": round(stukprijs_per_pers, 4)
+    vak_e = st.number_input("Inhoud van product / St/unit (Vak E)", min_value=0.0001, value=1.0000, step=0.0001, format="%.4f")
+    vak_f = st.number_input("Aantal nodig voor één persoon / st/pers (Vak F)", min_value=0.0000, value=1.0000, step=0.0001, format="%.4f")
+    vak_g = st.number_input("Prijs van het product op basis van inhoud (Vak G)", min_value=0.00, value=0.00, step=0.01, format="%.2f")
+    
+    submit_button = st.form_submit_button(label='Voeg lijn toe')
+
+# Als er op de knop gedrukt wordt en er is een product ingevuld
+if submit_button and vak_b:
+    # EXACTE EXCEL FORMULES:
+    # vak c = vak d / vak e * vak f
+    vak_c = (vak_d / vak_e) * vak_f if vak_e > 0 else 0
+    
+    # vak h = vak c * vak g
+    vak_h = vak_c * vak_g
+    
+    # vak i = vak g / vak e * vak f
+    vak_i = (vak_g / vak_e) * vak_f if vak_e > 0 else 0
+    
+    # Opslaan in de lijst
+    nieuwe_lijn = {
+        "Leverancier (Vak A)": vak_a,
+        "Product (Vak B)": vak_b,
+        "Bestel qt (Vak C)": round(vak_c, 4),
+        "Aantal pers (Vak D)": vak_d,
+        "St/unit (Vak E)": vak_e,
+        "st/pers (Vak F)": vak_f,
+        "Prijs (Vak G)": round(vak_g, 2),
+        "Totaal (Vak H)": round(vak_h, 2),
+        "Stukprijs (Vak I)": round(vak_i, 6)
     }
-    st.session_state.ingredients.append(new_ingredient)
-    st.success(f"'{product}' succesvol toegevoegd!")
+    st.session_state.recept_lijnen.append(nieuwe_lijn)
+    st.success(f"'{vak_b}' succesvol toegevoegd!")
 
-# Recept overzicht en totalen tonen
-if st.session_state.ingredients:
-    df = pd.DataFrame(st.session_state.ingredients)
+# Het tonen van het overzicht en de totalen
+if st.session_state.recept_lijnen:
+    df = pd.DataFrame(st.session_state.recept_lijnen)
     
-    # Eindberekening: Tel alle stukprijzen op en doe maal 4.3
-    som_stukprijzen = df["Stukprijs p.p."].sum()
-    totale_kostprijs = som_stukprijzen * 4.3
+    # BEREKENING KOSTPRIJS GERECHT:
+    # Alle lijnen waar iets ingegeven is: de stukprijs (Vak I) samentellen en vermenigvuldigen maal 4,3
+    som_stukprijzen = df["Stukprijs (Vak I)"].sum()
+    kostprijs_gerecht = som_stukprijzen * 4.3
     
-    # Dashboard kaarten bovenaan tonen
+    # Resultaat grote kaarten tonen
     col1, col2 = st.columns(2)
     with col1:
-        st.metric(label="Som Stukprijzen p.p.", value=f"€ {som_stukprijzen:.4f}")
+        st.metric(label="Som van Stukprijzen (Vak I)", value=f"€ {som_stukprijzen:.4f}")
     with col2:
-        st.metric(label="Totale Kostprijs Gerecht (Som x 4.3)", value=f"€ {totale_kostprijs:.2f}")
-        
-    st.subheader("📋 Recept Overzicht")
+        st.metric(label="Kostprijs van het gerecht (Som x 4,3)", value=f"€ {kostprijs_gerecht:.2f}")
+    
+    st.subheader("📋 Actueel Recept")
     st.dataframe(df, use_container_width=True)
     
-    # Knop om de lijst leeg te maken
-    if st.button("🧹 Hele recept wissen"):
-        st.session_state.ingredients = []
+    # Wis knop
+    if st.button("🧹 Recept volledig wissen"):
+        st.session_state.recept_lijnen = []
         st.rerun()
 else:
-    st.info("Voeg ingrediënten toe via het linkerpaneel om de berekening te starten.")
+    st.info("Voeg producten toe via het linkerpaneel om de berekening live te zien.")
